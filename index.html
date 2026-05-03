@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -204,6 +205,27 @@ header {
 .player-banner-icon { font-size:20px; }
 .player-banner-text { font-size:11px; color:var(--text-dim); }
 .player-banner-name { font-family:'Orbitron',sans-serif; font-size:12px; color:var(--accent); font-weight:700; }
+
+/* ── ONBOARDING PAGE ── */
+#onboardPage {
+  min-height:100vh; align-items:center; justify-content:center; padding:20px;
+}
+.onboard-box {
+  background:var(--surface); border:1px solid var(--border);
+  padding:40px 36px; width:100%; max-width:460px; position:relative;
+}
+.onboard-box::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,var(--gold),var(--accent));
+  box-shadow:0 0 20px rgba(255,215,0,0.3);
+}
+.onboard-step { font-size:9px; letter-spacing:3px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
+.onboard-title { font-family:'Orbitron',sans-serif; font-size:20px; font-weight:900; color:var(--text-bright); letter-spacing:2px; margin-bottom:6px; }
+.onboard-sub { font-size:11px; color:var(--text-dim); margin-bottom:28px; line-height:1.7; }
+.onboard-google-info { display:flex; align-items:center; gap:10px; background:var(--bg3); border:1px solid var(--border); padding:12px 14px; margin-bottom:24px; }
+.onboard-google-avatar { width:36px; height:36px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:var(--bg); flex-shrink:0; }
+.onboard-google-name { font-size:12px; color:var(--text-bright); font-weight:700; }
+.onboard-google-email { font-size:10px; color:var(--text-dim); }
 
 /* ── NOT JOINED ── */
 .not-joined {
@@ -417,6 +439,47 @@ td.received-amt { color:var(--win); }
       <div class="auth-error" id="joinError"></div>
       <button class="btn btn-primary" onclick="joinTeam()" style="margin-bottom:12px">JOIN TEAM</button>
       <button class="btn btn-ghost" onclick="signOut()">SIGN OUT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ ONBOARDING PAGE (Google new users) ══════════════ -->
+<div class="page" id="onboardPage">
+  <div style="position:relative;z-index:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+    <div class="onboard-box">
+      <div class="onboard-step">Step 1 of 1 — Profile Setup</div>
+      <div class="onboard-title">ALMOST IN.</div>
+      <div class="onboard-sub">You're signed in with Google. Just set your team name and role to get started.</div>
+
+      <div class="onboard-google-info" id="onboardGoogleInfo">
+        <div class="onboard-google-avatar" id="onboardAvatar">?</div>
+        <div>
+          <div class="onboard-google-name" id="onboardGoogleName">—</div>
+          <div class="onboard-google-email" id="onboardGoogleEmail">—</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Team / Squad Name</label>
+        <input type="text" id="onboardTeamName" placeholder="e.g. Team Shadow, Solo Grinder...">
+      </div>
+
+      <div class="field"><label>Select Your Role</label></div>
+      <div class="role-select">
+        <div class="role-card manager selected" id="onboardRoleManager" onclick="selectOnboardRole('manager')">
+          <div class="role-icon">👑</div>
+          <div class="role-name">MANAGER</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;">Add &amp; manage entries</div>
+        </div>
+        <div class="role-card" id="onboardRolePlayer" onclick="selectOnboardRole('player')">
+          <div class="role-icon">🎮</div>
+          <div class="role-name">PLAYER</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;">View team entries</div>
+        </div>
+      </div>
+
+      <div class="auth-error" id="onboardError"></div>
+      <button class="btn btn-primary" onclick="submitOnboarding()">ENTER THE ARENA</button>
     </div>
   </div>
 </div>
@@ -712,19 +775,68 @@ window.signInGoogle = async () => {
     const user = result.user;
     const snap = await getDoc(doc(db,'users',user.uid));
     if(!snap.exists()) {
-      // New google user → default to manager (they can join later)
-      await createUserProfile(user, user.displayName||'Player', 'manager');
+      // New Google user → show onboarding page to pick role & team name
+      showOnboarding(user);
     }
+    // If profile exists, onAuthStateChanged handles routing
   } catch(e) {
     toast(e.message, true);
   }
 };
 
+// ── ONBOARDING (Google new users) ──
+let onboardingUser = null;
+let onboardingRole = 'manager';
+
+function showOnboarding(user) {
+  onboardingUser = user;
+  onboardingRole = 'manager';
+  // Pre-fill Google info
+  document.getElementById('onboardGoogleName').textContent = user.displayName || 'User';
+  document.getElementById('onboardGoogleEmail').textContent = user.email || '';
+  document.getElementById('onboardAvatar').textContent = (user.displayName||'U')[0].toUpperCase();
+  document.getElementById('onboardTeamName').value = '';
+  document.getElementById('onboardError').textContent = '';
+  // Reset role selection
+  document.getElementById('onboardRoleManager').className = 'role-card manager selected';
+  document.getElementById('onboardRolePlayer').className = 'role-card';
+  showPage('onboardPage');
+}
+
+window.selectOnboardRole = (role) => {
+  onboardingRole = role;
+  document.getElementById('onboardRoleManager').className = 'role-card manager' + (role==='manager'?' selected':'');
+  document.getElementById('onboardRolePlayer').className = 'role-card' + (role==='player'?' selected':'');
+};
+
+window.submitOnboarding = async () => {
+  const teamName = document.getElementById('onboardTeamName').value.trim();
+  const errEl = document.getElementById('onboardError');
+  errEl.textContent = '';
+  if(!teamName){ errEl.textContent = 'Please enter a team / squad name'; return; }
+  if(!onboardingUser){ errEl.textContent = 'Session error. Please sign in again.'; return; }
+  try {
+    await createUserProfile(onboardingUser, teamName, onboardingRole);
+    // Now trigger normal routing via profile load
+    const snap = await getDoc(doc(db,'users', onboardingUser.uid));
+    userProfile = snap.data();
+    currentUser = onboardingUser;
+    if(onboardingRole === 'player') {
+      showPage('joinPage');
+    } else {
+      initApp();
+    }
+    onboardingUser = null;
+  } catch(e) {
+    errEl.textContent = e.message;
+  }
+};
+
 // ── CREATE USER PROFILE ──
-async function createUserProfile(user, name, role) {
+async function createUserProfile(user, teamName, role) {
   const profile = {
     uid: user.uid,
-    name,
+    name: teamName,           // team/squad name used as display name
     email: user.email,
     role,
     createdAt: new Date().toISOString(),
@@ -781,13 +893,15 @@ onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     const snap = await getDoc(doc(db,'users',user.uid));
     if(!snap.exists()) {
-      await createUserProfile(user, user.displayName||'User', 'manager');
-      userProfile = (await getDoc(doc(db,'users',user.uid))).data();
-    } else {
-      userProfile = snap.data();
+      // No profile yet — this is a new Google user mid-onboarding
+      // showOnboarding() already called from signInGoogle, just hide loader
+      hideLoader();
+      showOnboarding(user);
+      return;
     }
+    userProfile = snap.data();
     hideLoader();
-    // Player with no manager → show join page
+    // Route based on role
     if(userProfile.role==='player' && !userProfile.managerId) {
       showPage('joinPage');
     } else {
@@ -796,6 +910,7 @@ onAuthStateChanged(auth, async (user) => {
   } else {
     currentUser = null;
     userProfile = null;
+    onboardingUser = null;
     hideLoader();
     showPage('authPage');
   }
