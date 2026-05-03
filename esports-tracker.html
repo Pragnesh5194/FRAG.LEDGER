@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FRAG LEDGER — Esports Balance Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b10;
+    --bg2: #0d1218;
+    --bg3: #111820;
+    --surface: #141c26;
+    --surface2: #1a2535;
+    --border: #1e2d40;
+    --accent: #00e5ff;
+    --accent2: #ff3d71;
+    --accent3: #39ff14;
+    --gold: #ffd700;
+    --text: #c8d8e8;
+    --text-dim: #556677;
+    --text-bright: #e8f4ff;
+    --win: #39ff14;
+    --loss: #ff3d71;
+    --pending: #ffd700;
+    --glow: 0 0 20px rgba(0,229,255,0.3);
+    --glow-red: 0 0 20px rgba(255,61,113,0.3);
+    --glow-green: 0 0 20px rgba(57,255,20,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Grid background */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Header */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(22px, 5vw, 36px);
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(0,229,255,0.6), 0 0 60px rgba(0,229,255,0.2);
+    line-height: 1;
+  }
+
+  .logo span {
+    color: var(--accent2);
+    text-shadow: 0 0 30px rgba(255,61,113,0.6);
+  }
+
+  .subtitle {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .month-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 4px;
+  }
+
+  .month-selector label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .month-selector select {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* Stats grid */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.cyan::before { background: var(--accent); box-shadow: var(--glow); }
+  .stat-card.red::before { background: var(--accent2); box-shadow: var(--glow-red); }
+  .stat-card.green::before { background: var(--win); box-shadow: var(--glow-green); }
+  .stat-card.gold::before { background: var(--gold); box-shadow: 0 0 20px rgba(255,215,0,0.4); }
+
+  .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(18px, 3vw, 26px);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-value.cyan { color: var(--accent); }
+  .stat-value.red { color: var(--accent2); }
+  .stat-value.green { color: var(--win); }
+  .stat-value.gold { color: var(--gold); }
+
+  .stat-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Controls bar */
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    border: 1px solid;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .btn:hover::after { opacity: 0.08; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+
+  .btn-primary:hover { box-shadow: 0 0 30px rgba(0,229,255,0.5); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border-color: var(--border);
+  }
+
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .filter-btns {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .filter-btn {
+    font-size: 9px;
+    padding: 6px 12px;
+    letter-spacing: 1px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  .filter-btn.active, .filter-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--accent);
+    box-shadow: var(--glow), 0 0 60px rgba(0,0,0,0.8);
+    padding: 28px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.2s;
+  }
+
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .field input, .field select, .field textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-bright);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,229,255,0.2);
+  }
+
+  .field select option { background: var(--bg2); }
+
+  .field textarea { resize: vertical; min-height: 72px; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+    justify-content: flex-end;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: none; border: none;
+    color: var(--text-dim);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+
+  .modal-close:hover { color: var(--accent2); }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: var(--bg3);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  th {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    padding: 12px 14px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    animation: rowIn 0.3s ease both;
+  }
+
+  tbody tr:hover { background: var(--surface2); }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  td {
+    padding: 11px 14px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  td.date-cell { color: var(--text-dim); font-size: 11px; }
+
+  td.game-cell {
+    color: var(--text-bright);
+    font-weight: 700;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  td.amount { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700; }
+  td.entry-amt { color: var(--accent2); }
+  td.received-amt { color: var(--win); }
+
+  .rank-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .rank-1 { background: rgba(255,215,0,0.15); color: var(--gold); border: 1px solid rgba(255,215,0,0.4); }
+  .rank-2 { background: rgba(192,192,192,0.15); color: #c0c0c0; border: 1px solid rgba(192,192,192,0.4); }
+  .rank-3 { background: rgba(205,127,50,0.15); color: #cd7f32; border: 1px solid rgba(205,127,50,0.4); }
+  .rank-top { background: rgba(0,229,255,0.1); color: var(--accent); border: 1px solid rgba(0,229,255,0.3); }
+  .rank-other { background: rgba(255,255,255,0.05); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .status-badge {
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-badge::before { content: '●'; font-size: 7px; }
+
+  .status-yes { background: rgba(57,255,20,0.1); color: var(--win); border: 1px solid rgba(57,255,20,0.3); }
+  .status-no { background: rgba(255,215,0,0.1); color: var(--pending); border: 1px solid rgba(255,215,0,0.3); }
+
+  .pnl-positive { color: var(--win); font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700; }
+  .pnl-negative { color: var(--accent2); font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700; }
+
+  .actions-cell { display: flex; gap: 6px; }
+
+  .action-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .action-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .empty-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    color: var(--text-dim);
+  }
+
+  .empty-sub { font-size: 11px; }
+
+  /* Notes panel */
+  .notes-section {
+    margin-top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .notes-header {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .notes-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .notes-textarea {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 12px;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+  }
+
+  .notes-textarea:focus { border-color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* Pulse animation for live stats */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .live-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--win);
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+    box-shadow: var(--glow-green);
+  }
+
+  /* Win rate bar */
+  .win-bar-wrap {
+    margin-top: 8px;
+    background: var(--bg3);
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .win-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--win));
+    transition: width 0.6s ease;
+    box-shadow: var(--glow-green);
+  }
+
+  /* Notification toast */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 12px 20px;
+    z-index: 600;
+    box-shadow: var(--glow);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  @media (max-width: 600px) {
+    .filter-btns { margin-left: 0; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .filter-btns { justify-content: flex-start; }
+    th:nth-child(2), td:nth-child(2) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <div class="logo">FRAG<span>.</span>LEDGER</div>
+      <div class="subtitle"><span class="live-dot"></span>Esports Balance Tracker · May 2026</div>
+    </div>
+    <div class="month-selector">
+      <label>Month</label>
+      <select id="monthSelect" onchange="render()">
+        <option value="2026-01">Jan 2026</option>
+        <option value="2026-02">Feb 2026</option>
+        <option value="2026-03">Mar 2026</option>
+        <option value="2026-04">Apr 2026</option>
+        <option value="2026-05" selected>May 2026</option>
+        <option value="2026-06">Jun 2026</option>
+        <option value="2026-07">Jul 2026</option>
+        <option value="2026-08">Aug 2026</option>
+        <option value="2026-09">Sep 2026</option>
+        <option value="2026-10">Oct 2026</option>
+        <option value="2026-11">Nov 2026</option>
+        <option value="2026-12">Dec 2026</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats" id="statsGrid"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-primary" onclick="openModal()">+ ADD ENTRY</button>
+    <div class="filter-btns">
+      <button class="filter-btn active" onclick="setFilter('all', this)">ALL</button>
+      <button class="filter-btn" onclick="setFilter('settled', this)">SETTLED</button>
+      <button class="filter-btn" onclick="setFilter('pending', this)">PENDING</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Tournament / Game</th>
+          <th>Entry</th>
+          <th>Rank</th>
+          <th>Received</th>
+          <th>P&L</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" style="display:none">
+      <div class="empty-state">
+        <div class="empty-icon">🎮</div>
+        <div class="empty-title">NO ENTRIES YET</div>
+        <div class="empty-sub">Click + ADD ENTRY to log your first tournament</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="notes-section">
+    <div class="notes-header">Session Notes</div>
+    <textarea class="notes-textarea" id="notesArea" placeholder="Add notes for this month..." oninput="saveNotes()"></textarea>
+  </div>
+
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle">New Entry</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="fDate">
+      </div>
+      <div class="field">
+        <label>Time</label>
+        <input type="time" id="fTime">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tournament / Game Name</label>
+      <input type="text" id="fGame" placeholder="e.g. BGMI Pro Series Q1">
+    </div>
+
+    <div class="field">
+      <label>Platform</label>
+      <select id="fPlatform">
+        <option value="">— Select Platform —</option>
+        <option>BGMI</option>
+        <option>Free Fire</option>
+        <option>Valorant</option>
+        <option>PUBG Mobile</option>
+        <option>COD Mobile</option>
+        <option>Chess</option>
+        <option>Other</option>
+      </select>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Entry Fee (₹)</label>
+        <input type="number" id="fEntry" placeholder="0" min="0">
+      </div>
+      <div class="field">
+        <label>Prize Received (₹)</label>
+        <input type="number" id="fReceived" placeholder="0" min="0">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Rank Achieved</label>
+        <input type="number" id="fRank" placeholder="e.g. 1" min="1">
+      </div>
+      <div class="field">
+        <label>Settled?</label>
+        <select id="fSettled">
+          <option value="Yes">Yes — Paid</option>
+          <option value="No">No — Pending</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="fNotes" placeholder="Any notes about this entry..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEntry()">SAVE ENTRY</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // --- State ---
+  let entries = JSON.parse(localStorage.getItem('fragled_entries') || '[]');
+  let notes = JSON.parse(localStorage.getItem('fragled_notes') || '{}');
+  let editId = null;
+  let currentFilter = 'all';
+
+  // --- Helpers ---
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+  function getMonth() { return document.getElementById('monthSelect').value; }
+
+  function entriesForMonth() {
+    const m = getMonth();
+    return entries.filter(e => e.date && e.date.startsWith(m));
+  }
+
+  function filteredEntries() {
+    let list = entriesForMonth();
+    if (currentFilter === 'settled') list = list.filter(e => e.settled === 'Yes');
+    if (currentFilter === 'pending') list = list.filter(e => e.settled === 'No');
+    return list;
+  }
+
+  function fmt(n) {
+    const num = parseFloat(n) || 0;
+    return '₹' + num.toLocaleString('en-IN');
+  }
+
+  function pnl(e) { return (parseFloat(e.received) || 0) - (parseFloat(e.entry) || 0); }
+
+  function rankClass(r) {
+    if (!r) return 'rank-other';
+    const n = parseInt(r);
+    if (n === 1) return 'rank-1';
+    if (n === 2) return 'rank-2';
+    if (n === 3) return 'rank-3';
+    if (n <= 10) return 'rank-top';
+    return 'rank-other';
+  }
+
+  function rankLabel(r) {
+    if (!r) return '—';
+    const n = parseInt(r);
+    if (n === 1) return '🥇 #1';
+    if (n === 2) return '🥈 #2';
+    if (n === 3) return '🥉 #3';
+    return '#' + n;
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // --- Render ---
+  function render() {
+    renderStats();
+    renderTable();
+    loadNotes();
+  }
+
+  function renderStats() {
+    const list = entriesForMonth();
+    const totalSpend = list.reduce((s, e) => s + (parseFloat(e.entry) || 0), 0);
+    const totalReceived = list.reduce((s, e) => s + (parseFloat(e.received) || 0), 0);
+    const netPnl = totalReceived - totalSpend;
+    const pending = list.filter(e => e.settled === 'No').reduce((s, e) => s + (parseFloat(e.received) || 0), 0);
+    const wins = list.filter(e => pnl(e) > 0).length;
+    const winRate = list.length > 0 ? Math.round((wins / list.length) * 100) : 0;
+
+    const g = document.getElementById('statsGrid');
+    g.innerHTML = `
+      <div class="stat-card cyan">
+        <div class="stat-label">Total Spend</div>
+        <div class="stat-value red">${fmt(totalSpend)}</div>
+        <div class="stat-sub">${list.length} tournament${list.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Total Received</div>
+        <div class="stat-value green">${fmt(totalReceived)}</div>
+        <div class="stat-sub">${list.filter(e=>e.settled==='Yes').length} settled</div>
+      </div>
+      <div class="stat-card ${netPnl >= 0 ? 'green' : 'red'}">
+        <div class="stat-label">Net P&L</div>
+        <div class="stat-value ${netPnl >= 0 ? 'green' : 'red'}">${netPnl >= 0 ? '+' : ''}${fmt(netPnl)}</div>
+        <div class="stat-sub">${netPnl >= 0 ? 'Profit' : 'Loss'} this month</div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value gold">${fmt(pending)}</div>
+        <div class="stat-sub">${list.filter(e=>e.settled==='No').length} unsettled</div>
+      </div>
+      <div class="stat-card cyan">
+        <div class="stat-label">Win Rate</div>
+        <div class="stat-value cyan">${winRate}%</div>
+        <div class="win-bar-wrap"><div class="win-bar" style="width:${winRate}%"></div></div>
+      </div>
+    `;
+  }
+
+  function renderTable() {
+    const list = filteredEntries();
+    const tbody = document.getElementById('tableBody');
+    const empty = document.getElementById('emptyState');
+
+    if (list.length === 0) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+
+    empty.style.display = 'none';
+    const sorted = [...list].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+
+    tbody.innerHTML = sorted.map((e, i) => {
+      const p = pnl(e);
+      const pnlClass = p >= 0 ? 'pnl-positive' : 'pnl-negative';
+      const pnlStr = (p >= 0 ? '+' : '') + fmt(p);
+      return `<tr style="animation-delay:${i * 0.04}s">
+        <td class="date-cell">${e.date || '—'}</td>
+        <td class="date-cell">${e.time || '—'}</td>
+        <td class="game-cell" title="${e.game || ''}">${e.game || '—'}${e.platform ? `<br><span style="font-size:9px;color:var(--text-dim);font-weight:400">${e.platform}</span>` : ''}</td>
+        <td class="amount entry-amt">${fmt(e.entry)}</td>
+        <td><span class="rank-badge ${rankClass(e.rank)}">${rankLabel(e.rank)}</span></td>
+        <td class="amount received-amt">${fmt(e.received)}</td>
+        <td class="${pnlClass}">${pnlStr}</td>
+        <td><span class="status-badge ${e.settled === 'Yes' ? 'status-yes' : 'status-no'}">${e.settled || 'Pending'}</span></td>
+        <td><div class="actions-cell">
+          <button class="action-btn" onclick="editEntry('${e.id}')">✎</button>
+          <button class="action-btn" onclick="deleteEntry('${e.id}')">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // --- Filter ---
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTable();
+  }
+
+  // --- Modal ---
+  function openModal(id = null) {
+    editId = id;
+    const modal = document.getElementById('modalOverlay');
+    const title = document.getElementById('modalTitle');
+
+    if (id) {
+      const e = entries.find(x => x.id === id);
+      title.textContent = 'Edit Entry';
+      document.getElementById('fDate').value = e.date || '';
+      document.getElementById('fTime').value = e.time || '';
+      document.getElementById('fGame').value = e.game || '';
+      document.getElementById('fPlatform').value = e.platform || '';
+      document.getElementById('fEntry').value = e.entry || '';
+      document.getElementById('fReceived').value = e.received || '';
+      document.getElementById('fRank').value = e.rank || '';
+      document.getElementById('fSettled').value = e.settled || 'Yes';
+      document.getElementById('fNotes').value = e.notes || '';
+    } else {
+      title.textContent = 'New Entry';
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toTimeString().slice(0,5);
+      document.getElementById('fDate').value = today;
+      document.getElementById('fTime').value = now;
+      document.getElementById('fGame').value = '';
+      document.getElementById('fPlatform').value = '';
+      document.getElementById('fEntry').value = '';
+      document.getElementById('fReceived').value = '';
+      document.getElementById('fRank').value = '';
+      document.getElementById('fSettled').value = 'Yes';
+      document.getElementById('fNotes').value = '';
+    }
+
+    modal.classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    editId = null;
+  }
+
+  function closeModalOnBg(e) {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+  }
+
+  function saveEntry() {
+    const game = document.getElementById('fGame').value.trim();
+    if (!game) { document.getElementById('fGame').focus(); return; }
+
+    const entry = {
+      id: editId || uid(),
+      date: document.getElementById('fDate').value,
+      time: document.getElementById('fTime').value,
+      game,
+      platform: document.getElementById('fPlatform').value,
+      entry: document.getElementById('fEntry').value,
+      received: document.getElementById('fReceived').value,
+      rank: document.getElementById('fRank').value,
+      settled: document.getElementById('fSettled').value,
+      notes: document.getElementById('fNotes').value,
+    };
+
+    if (editId) {
+      const idx = entries.findIndex(e => e.id === editId);
+      entries[idx] = entry;
+      toast('ENTRY UPDATED');
+    } else {
+      entries.push(entry);
+      toast('ENTRY SAVED');
+    }
+
+    localStorage.setItem('fragled_entries', JSON.stringify(entries));
+    closeModal();
+    render();
+  }
+
+  function editEntry(id) { openModal(id); }
+
+  function deleteEntry(id) {
+    if (!confirm('Delete this entry?')) return;
+    entries = entries.filter(e => e.id !== id);
+    localStorage.setItem('fragled_entries', JSON.stringify(entries));
+    toast('ENTRY DELETED');
+    render();
+  }
+
+  // --- Notes ---
+  function saveNotes() {
+    const m = getMonth();
+    notes[m] = document.getElementById('notesArea').value;
+    localStorage.setItem('fragled_notes', JSON.stringify(notes));
+  }
+
+  function loadNotes() {
+    const m = getMonth();
+    document.getElementById('notesArea').value = notes[m] || '';
+  }
+
+  // --- Keyboard ---
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'n' && e.ctrlKey) { e.preventDefault(); openModal(); }
+  });
+
+  // --- Init ---
+  render();
+</script>
+</body>
+</html>
