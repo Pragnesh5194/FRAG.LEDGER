@@ -47,13 +47,22 @@ body::after {
 }
 
 /* ── PAGES ── */
-.page { display:none; position:relative; z-index:1; }
-.page.active { display:block; }
+.page {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow-y: auto;
+}
+.page.active {
+  display: flex;
+  flex-direction: column;
+}
 
 /* ── AUTH PAGE ── */
 #authPage {
   min-height:100vh;
-  display:flex; align-items:center; justify-content:center;
+  align-items:center; justify-content:center;
   padding:20px;
 }
 .auth-box {
@@ -134,7 +143,7 @@ body::after {
 
 /* ── JOIN PAGE ── */
 #joinPage {
-  min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+  min-height:100vh; align-items:center; justify-content:center; padding:20px;
 }
 .join-box {
   background:var(--surface); border:1px solid var(--border);
@@ -146,7 +155,7 @@ body::after {
 }
 
 /* ── APP SHELL ── */
-#appPage { min-height:100vh; }
+#appPage { min-height:100vh; flex-direction:column; }
 header {
   display:flex; justify-content:space-between; align-items:center;
   padding:16px 24px; border-bottom:1px solid var(--border);
@@ -349,7 +358,7 @@ td.received-amt { color:var(--win); }
 
 <!-- ══════════════ AUTH PAGE ══════════════ -->
 <div class="page" id="authPage">
-  <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+  <div style="position:relative;z-index:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
     <div class="auth-box">
       <div class="auth-logo">FRAG<span>.</span>LEDGER</div>
       <div class="auth-sub"><span class="live-dot"></span>Esports Balance Tracker</div>
@@ -399,7 +408,7 @@ td.received-amt { color:var(--win); }
 
 <!-- ══════════════ JOIN PAGE (Player with no team) ══════════════ -->
 <div class="page" id="joinPage">
-  <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+  <div style="position:relative;z-index:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
     <div class="join-box">
       <div class="auth-logo" style="margin-bottom:4px">FRAG<span>.</span>LEDGER</div>
       <div class="auth-sub" style="margin-bottom:28px">JOIN A TEAM</div>
@@ -610,14 +619,22 @@ function uid6() {
 }
 
 function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = 'none';
+  });
+  const target = document.getElementById(id);
+  target.style.display = '';
+  target.classList.add('active');
+  window.scrollTo(0,0);
 }
+window.showPage = showPage;
 
 function hideLoader() {
   const l = document.getElementById('loader');
-  l.classList.add('hide');
-  setTimeout(() => l.style.display='none', 400);
+  l.style.opacity = '0';
+  l.style.transition = 'opacity 0.4s';
+  setTimeout(() => { l.style.display='none'; }, 400);
 }
 
 function toast(msg, isError=false) {
