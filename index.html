@@ -168,6 +168,10 @@ header{
   color:var(--volt);border-top:1px solid var(--line);
 }
 .tsd-add:hover{background:rgba(200,255,0,.05);}
+.tsd-item-actions{display:flex;gap:4px;margin-left:auto;flex-shrink:0;}
+.tsd-act{background:none;border:1px solid var(--line);color:var(--dim);font-size:9px;padding:3px 7px;cursor:pointer;font-family:'Share Tech Mono',monospace;transition:all .15s;letter-spacing:1px;}
+.tsd-act:hover{border-color:var(--volt);color:var(--volt);}
+.tsd-act.del:hover{border-color:var(--red);color:var(--red);}
 
 .hdr-r{display:flex;align-items:center;gap:8px;}
 .user-tag{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 12px;}
@@ -697,7 +701,35 @@ td{padding:11px 14px;white-space:nowrap;vertical-align:middle;}
   </div>
 </div>
 
-<!-- DELETE CONFIRM -->
+<!-- RENAME TEAM MODAL -->
+<div class="mbg" id="renameModal" onclick="if(event.target===this)closeRenameTeam()">
+  <div class="modal" style="max-width:360px;">
+    <button class="mclose" onclick="closeRenameTeam()">✕</button>
+    <div class="mttl">Rename Team</div>
+    <div class="fl"><label>New Team Name</label><input type="text" id="renameInput" placeholder="Enter new name..."></div>
+    <div class="aerr" id="renameErr"></div>
+    <div class="mactions">
+      <button class="btn btn-o btn-sm" onclick="closeRenameTeam()">Cancel</button>
+      <button class="btn btn-v btn-sm" onclick="doRenameTeam()">Save Name</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE TEAM CONFIRM -->
+<div class="mbg" id="delTeamModal" onclick="if(event.target===this)closeDeleteTeam()">
+  <div class="modal" style="max-width:340px;text-align:center;">
+    <div class="mttl" style="color:var(--red)">Remove Team?</div>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:6px;">You are about to remove:</p>
+    <p style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--bright);margin-bottom:14px;" id="delTeamName">—</p>
+    <p style="font-size:12px;color:var(--dim);margin-bottom:20px;">This will not delete entries. Players will lose access.</p>
+    <div class="mactions" style="justify-content:center;">
+      <button class="btn btn-o btn-sm" onclick="closeDeleteTeam()">Cancel</button>
+      <button class="btn btn-r btn-sm" onclick="doDeleteTeam()">Remove Team</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ENTRY CONFIRM -->
 <div class="mbg" id="delModal">
   <div class="modal" style="max-width:320px;text-align:center;">
     <div class="mttl" style="color:var(--red)">Delete Entry?</div>
@@ -769,20 +801,31 @@ function renderTSWList(){
   el.innerHTML=teams.map(t=>`
     <div class="tsd-item ${activeTeam?.id===t.id?'active-t':''}" onclick="switchActiveTeam('${t.id}')">
       <div class="tsd-dot"></div>
-      <div>
-        <div class="tsd-tname">${t.name}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="tsd-tname">${t.name}${activeTeam?.id===t.id?' <span style="font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--volt);margin-left:6px;">ACTIVE</span>':''}</div>
         <div class="tsd-code">${t.inviteCode}</div>
       </div>
-      ${activeTeam?.id===t.id?'<span style="margin-left:auto;font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--volt);">ACTIVE</span>':''}
+      <div class="tsd-item-actions" onclick="event.stopPropagation()">
+        <button class="tsd-act" onclick="openRenameTeam('${t.id}','${t.name.replace(/'/g,"\'")}')" title="Rename">✎</button>
+        <button class="tsd-act del" onclick="openDeleteTeam('${t.id}','${t.name.replace(/'/g,"\'")}')" title="Remove">✕</button>
+      </div>
     </div>`).join('');
 }
 
 window.switchActiveTeam=async(id)=>{
   closeTSW();
   activeTeam=teams.find(t=>t.id===id);
+  if(!activeTeam)return;
   localStorage.setItem('fl_at_'+CU.uid,id);
   try{await updateDoc(doc(db,'users',CU.uid),{activeTeamId:id});}catch(e){}
-  updateUI();subscribeEntries();
+  // Update ALL team name displays immediately
+  document.getElementById('tswName').textContent=activeTeam.name;
+  document.getElementById('csTeam').textContent=activeTeam.name;
+  document.getElementById('csCode').textContent=activeTeam.inviteCode;
+  document.getElementById('mgrStrip').style.display='flex';
+  renderTSWList();
+  renderTeamsGrid();
+  subscribeEntries();
   toast('Switched to: '+activeTeam.name);
 };
 
@@ -950,8 +993,10 @@ function renderTeamsGrid(){
       <div class="tm-name">${t.name}</div>
       <div class="tm-code">CODE: ${t.inviteCode}</div>
       <div class="tm-meta"><div class="tm-mi">Players: <strong>${(t.players||[]).length}</strong></div></div>
-      <div class="tm-actions">
-        <button class="btn btn-o btn-xs" onclick="event.stopPropagation();copyTeamCode('${t.inviteCode}')">⎘ Copy Code</button>
+      <div class="tm-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-o btn-xs" onclick="copyTeamCode('${t.inviteCode}')">⎘ Copy Code</button>
+        <button class="btn btn-o btn-xs" onclick="openRenameTeam('${t.id}','${t.name.replace(/'/g,"\'")}')" style="color:var(--ice);border-color:rgba(0,207,255,.3)">✎ Rename</button>
+        <button class="btn btn-o btn-xs" onclick="openDeleteTeam('${t.id}','${t.name.replace(/'/g,"\'")}')" style="color:var(--red);border-color:rgba(255,51,85,.3)">✕ Remove</button>
       </div>
     </div>`).join('');
 }
@@ -993,6 +1038,68 @@ window.doCreateTeam=async()=>{
       console.warn('Update Firestore rules:\nteams: allow create if request.auth != null');
     }else{err.textContent=e.message;}
   }
+};
+
+// ── RENAME TEAM ──
+let renameTeamId=null;
+window.openRenameTeam=(id,currentName)=>{
+  renameTeamId=id;
+  document.getElementById('renameInput').value=currentName;
+  document.getElementById('renameErr').textContent='';
+  document.getElementById('renameModal').classList.add('show');
+};
+window.closeRenameTeam=()=>{document.getElementById('renameModal').classList.remove('show');renameTeamId=null;};
+window.doRenameTeam=async()=>{
+  const name=document.getElementById('renameInput').value.trim();
+  const err=document.getElementById('renameErr');err.textContent='';
+  if(!name){err.textContent='Enter a team name';return;}
+  try{
+    await updateDoc(doc(db,'teams',renameTeamId),{name});
+    const t=teams.find(t=>t.id===renameTeamId);
+    if(t){t.name=name;}
+    if(activeTeam?.id===renameTeamId){
+      activeTeam.name=name;
+      document.getElementById('tswName').textContent=name;
+      document.getElementById('csTeam').textContent=name;
+    }
+    window.closeRenameTeam();
+    renderTeamsGrid();renderTSWList();
+    toast('Team renamed to: '+name,'g');
+  }catch(e){err.textContent=e.message;}
+};
+
+// ── DELETE TEAM ──
+let deleteTeamId=null;
+window.openDeleteTeam=(id,name)=>{
+  deleteTeamId=id;
+  document.getElementById('delTeamName').textContent=name;
+  document.getElementById('delTeamModal').classList.add('show');
+};
+window.closeDeleteTeam=()=>{document.getElementById('delTeamModal').classList.remove('show');deleteTeamId=null;};
+window.doDeleteTeam=async()=>{
+  if(!deleteTeamId)return;
+  try{
+    await deleteDoc(doc(db,'teams',deleteTeamId));
+    teams=teams.filter(t=>t.id!==deleteTeamId);
+    window.closeDeleteTeam();
+    // If deleted team was active, switch to first remaining
+    if(activeTeam?.id===deleteTeamId){
+      activeTeam=teams[0]||null;
+      if(activeTeam){
+        localStorage.setItem('fl_at_'+CU.uid,activeTeam.id);
+        document.getElementById('tswName').textContent=activeTeam.name;
+        document.getElementById('csTeam').textContent=activeTeam.name;
+        document.getElementById('csCode').textContent=activeTeam.inviteCode;
+        subscribeEntries();
+      }else{
+        document.getElementById('tswName').textContent='No Team';
+        document.getElementById('mgrStrip').style.display='none';
+        document.getElementById('tswName').textContent='— Select Team —';
+      }
+    }
+    renderTeamsGrid();renderTSWList();
+    toast('Team removed','g');
+  }catch(e){toast(e.message,'e');}
 };
 
 // ── ENTRIES ──
@@ -1175,7 +1282,15 @@ function loadNotes(){const el=document.getElementById('notesTA');if(el)el.value=
 window.saveNotes=()=>{notesData[getMonth()]=document.getElementById('notesTA').value;localStorage.setItem('fl_notes_'+CU.uid,JSON.stringify(notesData));};
 document.getElementById('monthSel')?.addEventListener('change',()=>render());
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){window.closeEntry();window.closeCreateTeam();document.getElementById('delModal').classList.remove('show');closeTSW();document.getElementById('ndrop').classList.remove('show');}
+  if(e.key==='Escape'){
+    window.closeEntry();
+    window.closeCreateTeam();
+    window.closeRenameTeam();
+    window.closeDeleteTeam();
+    document.getElementById('delModal').classList.remove('show');
+    closeTSW();
+    document.getElementById('ndrop').classList.remove('show');
+  }
 });
 </script>
 
